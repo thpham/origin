@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // DefaultUserAgent is the default User-Agent string set in the request header.
@@ -292,6 +293,17 @@ var applicationJSON = "application/json"
 func (client *ProviderClient) Request(method, url string, options *RequestOpts) (*http.Response, error) {
 	var body io.Reader
 	var contentType *string
+
+	// Check whether TokenID has expired. If so, invoke re-authentication.
+	if client.TokenExpireInSeconds >= 0 && client.TokenID != "" {
+		currentTime := time.Now()
+		duration := currentTime.Sub(client.TokenCreationTime).Seconds()
+		if duration >= float64(client.TokenExpireInSeconds) {
+			if client.ReauthFunc != nil {
+				client.ReauthFunc()
+			}
+		}
+	}
 
 	// Derive the content body by either encoding an arbitrary object as JSON, or by taking a provided
 	// io.ReadSeeker as-is. Default the content-type to application/json.
